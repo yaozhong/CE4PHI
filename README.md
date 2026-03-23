@@ -4,7 +4,28 @@ CE4PHI extends [CL4PHI](https://github.com/yaozhong/CL4PHI) from margin-based co
 
 Unlike traditional approaches that treat all non-positive samples as uniform negatives, CE4PHI employs a **TreePUInfoNCE** loss that weights unlabeled hosts by their evolutionary distance to known positive hosts. This encourages the learned embedding space to reflect both infection patterns and host phylogenetic relationships.
 
-![](figures/pipeline.png)
+![Pipeline](https://raw.githubusercontent.com/yaozhong/CE4PHI/main/figures/pipeline.png)
+
+> **Preprint:** Zhang Y. et al. *Phylogenetic tree-aware positive-unlabeled deep metric learning for phage–host interaction identification.* bioRxiv (2025). https://doi.org/10.64898/2025.12.31.696981v1
+
+---
+
+## Repository Structure
+
+```
+CE4PHI/
+├── code/
+│   ├── train_cl.py        # Training (CE4PHI / CL4PHI)
+│   ├── eval.py            # Prediction / inference
+│   ├── cmp_pred_gold.py   # Evaluation: species- and genus-level accuracy
+│   ├── model.py           # CNN encoders and TreePUInfoNCE loss
+│   ├── data_loading.py    # Data loading and FCGR collation utilities
+│   └── fasta2CGR.py       # K-mer counting and FCGR feature extraction
+└── figures/
+    └── pipeline.png
+```
+
+Browse source files on GitHub: https://github.com/yaozhong/CE4PHI/tree/main/code
 
 ---
 
@@ -17,27 +38,9 @@ Unlike traditional approaches that treat all non-positive samples as uniform neg
 - scikit-learn
 - numpy
 
-Install dependencies:
-
 ```bash
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 pip install pyfaidx pandas scikit-learn numpy
-```
-
----
-
-## Repository Structure
-
-```
-ce4phi_multiHost_tpu-joint/
-├── train_cl.py          # Training script (CE4PHI / CL4PHI)
-├── eval_tpu.py          # Prediction / inference script
-├── cmp_pred_gold.py     # Evaluation: species- and genus-level accuracy
-├── eval_tpu_viz.py      # Prediction with t-SNE visualization
-├── model.py             # Encoder architectures and TreePUInfoNCE loss
-├── data_loading.py      # Data loading and FCGR collation utilities
-├── fasta2CGR.py         # K-mer counting and FCGR (Frequency Chaos Game Representation)
-└── lorentz.py           # Hyperbolic geometry utilities
 ```
 
 ---
@@ -118,14 +121,14 @@ Used for optional taxonomy-level tree masking. Download from the [GTDB releases 
 
 ## Usage
 
-### Step 1 — Train CE4PHI
+### Step 1 — Train
 
 The recommended configuration uses a shared CNN encoder (`--enc_mode share`) and the TreePUInfoNCE loss (`--lossType tpuNCE`).
 
 ```bash
-python train_cl.py \
+python code/train_cl.py \
     --model CNN \
-    --model_dir saved_models/my_experiment.pth \
+    --model_dir saved_models/ce4phi_model.pth \
     --finetune_model_dir none \
     --enc_mode share \
     --kmer 6 \
@@ -179,12 +182,12 @@ At the end of training a summary line is printed:
 
 ---
 
-### Step 2 — Predict host(s) for test phages
+### Step 2 — Predict
 
 ```bash
-python eval_tpu.py \
+python code/eval.py \
     --model CNN \
-    --model_dir saved_models/my_experiment.pth \
+    --model_dir saved_models/ce4phi_model.pth \
     --enc_mode share \
     --kmer 6 \
     --host_fa data/host_genomes.fasta \
@@ -193,7 +196,7 @@ python eval_tpu.py \
     --test_host_gold data/phage_test_y.csv \
     --device cuda:0 \
     --metric chord \
-    > results/my_experiment_pred.txt
+    > results/predictions.txt
 ```
 
 `--test_host_gold` is optional. Omit it to run prediction-only mode (no evaluation during inference).
@@ -209,11 +212,11 @@ Each field after the phage ID is `<species name>_<distance score>`, sorted from 
 
 ---
 
-### Step 3 — Evaluate predictions
+### Step 3 — Evaluate
 
 ```bash
-python cmp_pred_gold.py \
-    --pred results/my_experiment_pred.txt \
+python code/cmp_pred_gold.py \
+    --pred results/predictions.txt \
     --gold data/phage_test_y.csv
 ```
 
@@ -251,76 +254,14 @@ Genus-level (total phages with gold):   634
 
 ---
 
-## Complete Example: CHERRY Dataset
-
-This reproduces the CHERRY benchmark results reported in the paper.
-
-```bash
-# Paths (adjust to your directory layout)
-HOMEDIR="/path/to/your/data"
-CODE_DIR="/path/to/ce4phi_multiHost_tpu-joint"
-
-# ── Training ───────────────────────────────────────────────────────────────
-python ${CODE_DIR}/train_cl.py \
-    --model CNN \
-    --model_dir saved_models/cherry_ce4phi.pth \
-    --finetune_model_dir none \
-    --enc_mode share \
-    --kmer 6 \
-    --host_fa ${HOMEDIR}/cherry/host_genomes.fasta \
-    --host_list ${HOMEDIR}/cherry/host_species.txt \
-    --train_phage_fa ${HOMEDIR}/cherry/phage_all.fasta \
-    --train_host_gold ${HOMEDIR}/cherry/phage_all_y.csv \
-    --valid_phage_fa ${HOMEDIR}/cherry/phage_all.fasta \
-    --valid_host_gold ${HOMEDIR}/cherry/phage_all_y.csv \
-    --device cuda:0 \
-    --lr 1e-5 \
-    --epoch 300 \
-    --batch_size 32 \
-    --lossType tpuNCE \
-    --temperature 0.07 \
-    --tree_dist ${HOMEDIR}/cherry/host_phylo_dist.csv \
-    --tree_sigma -1 \
-    --tree_ce_eps 0.02 \
-    --tree_level none \
-    --lambda_ph_tree 0 \
-    --metric chord \
-    --taxo_dic ${HOMEDIR}/databases/gtdb_taxonomy.tsv \
-    --seed 123 \
-    | tee logs/cherry_training.txt
-
-# ── Prediction ─────────────────────────────────────────────────────────────
-python ${CODE_DIR}/eval_tpu.py \
-    --model CNN \
-    --model_dir saved_models/cherry_ce4phi.pth \
-    --enc_mode share \
-    --kmer 6 \
-    --host_fa ${HOMEDIR}/cherry/host_genomes.fasta \
-    --host_list ${HOMEDIR}/cherry/host_species.txt \
-    --test_phage_fa ${HOMEDIR}/cherry/phage_test.fasta \
-    --test_host_gold ${HOMEDIR}/cherry/phage_test_y.csv \
-    --device cuda:0 \
-    --metric chord \
-    > results/cherry_predictions.txt
-
-# ── Evaluation ─────────────────────────────────────────────────────────────
-python ${CODE_DIR}/cmp_pred_gold.py \
-    --pred results/cherry_predictions.txt \
-    --gold ${HOMEDIR}/cherry/phage_test_y.csv
-```
-
-Expected validation accuracy during training: ~0.76 at epoch 195/300.
-
----
-
 ## Prediction-Only Mode (no gold labels)
 
-If you only have phage sequences and want predictions without evaluation:
+To run inference without evaluation (e.g., on newly sequenced phages), simply omit `--test_host_gold`:
 
 ```bash
-python eval_tpu.py \
+python code/eval.py \
     --model CNN \
-    --model_dir saved_models/my_experiment.pth \
+    --model_dir saved_models/ce4phi_model.pth \
     --enc_mode share \
     --kmer 6 \
     --host_fa data/host_genomes.fasta \
@@ -335,32 +276,20 @@ The output lists all host candidates ranked by embedding distance (ascending) fo
 
 ---
 
-## Benchmark Results
-
-### CHERRY dataset (406 phages, 52 hosts, species-level split)
-
-| Method | Top-1 Species | Top-1 Genus | Top-3 Species | Top-5 Species |
-|--------|--------------|-------------|--------------|--------------|
-| CE4PHI (this work) | **0.603** | **0.707** | **0.741** | **0.797** |
-| CL4PHI | 0.582 | 0.689 | 0.720 | 0.775 |
-
-### Hi-C metagenomic dataset (split 1)
-
-| Method | Top-1 Species | Top-1 Genus | Top-3 Genus |
-|--------|--------------|-------------|-------------|
-| CE4PHI | 0.630 | **0.957** | **1.000** |
-
----
-
 ## Citation
 
 If you use CE4PHI in your research, please cite:
 
+> Zhang Y. et al. *Phylogenetic tree-aware positive-unlabeled deep metric learning for phage–host interaction identification.* bioRxiv (2025). https://doi.org/10.64898/2025.12.31.696981v1
+
 ```bibtex
-@article{ce4phi2025,
+@article{zhang2025ce4phi,
   title   = {Phylogenetic tree-aware positive-unlabeled deep metric learning for phage--host interaction identification},
-  author  = {Zhang, Yaozhong and colleagues},
-  year    = {2025}
+  author  = {Zhang, Yaozhong and others},
+  journal = {bioRxiv},
+  year    = {2025},
+  doi     = {10.64898/2025.12.31.696981v1},
+  url     = {https://www.biorxiv.org/content/10.64898/2025.12.31.696981v1}
 }
 ```
 
@@ -368,6 +297,6 @@ If you use CE4PHI in your research, please cite:
 
 ## Related Work
 
-- **CL4PHI** (predecessor): [https://github.com/yaozhong/CL4PHI](https://github.com/yaozhong/CL4PHI)
-- **GTDB-Tk** for host phylogenetic tree construction: [https://github.com/Ecogenomics/GTDBTk](https://github.com/Ecogenomics/GTDBTk)
-- **FastTree** for tree distance extraction
+- **CL4PHI** (predecessor method): https://github.com/yaozhong/CL4PHI
+- **GTDB-Tk** for host phylogenetic tree construction: https://github.com/Ecogenomics/GTDBTk
+- **FastTree** for phylogenetic tree inference: http://www.microbesonline.org/fasttree/
