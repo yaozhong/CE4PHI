@@ -280,7 +280,7 @@ The output lists all host candidates ranked by embedding distance (ascending) fo
 
 If you use CE4PHI in your research, please cite:
 
-> Zhang Y. et al. *Phylogenetic tree-aware positive-unlabeled deep metric learning for phage–host interaction identification.* bioRxiv (2025). https://doi.org/10.64898/2025.12.31.696981v1
+> Zhang Y. et al. *Phylogenetic tree-aware positive-unlabeled deep metric learning for phage–host interaction identification.* bioRxiv (2025). [https://doi.org/10.64898/2025.12.31.696981v1](https://www.biorxiv.org/content/10.64898/2025.12.31.696981v1)
 
 ```bibtex
 @article{zhang2025ce4phi,
